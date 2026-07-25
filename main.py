@@ -97,9 +97,9 @@ API_KEYS = [
     os.getenv('GEMINI_KEY_1'),
     os.getenv('GEMINI_KEY_2'),
     os.getenv('GEMINI_KEY_3'),
-    os.getenv('GEMINI_KEY_4')
-    os.getenv('GEMINI_KEY_5')
-    os.getenv('GEMINI_KEY_6')
+    os.getenv('GEMINI_KEY_4'),
+    os.getenv('GEMINI_KEY_5'),
+    os.getenv('GEMINI_KEY_6'),
 ]
 API_KEYS = [key for key in API_KEYS if key]
 
