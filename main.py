@@ -230,15 +230,16 @@ def khoi_tao_gemini(existing_history=None):
     active_key = API_KEYS[current_key_index]
     ai_client = genai.Client(api_key=active_key)
     
-    trimmed_history = existing_history[-10:] if existing_history else None
+    trimmed_history = existing_history[-3:] if existing_history else None
     
     new_session = ai_client.chats.create(
-        model=SELECTED_MODEL,
-        config=types.GenerateContentConfig(
-            system_instruction=TINH_CACH_NHAN_VAT
-        ),
-        history=trimmed_history
-    )
+    model=SELECTED_MODEL,
+    config=types.GenerateContentConfig(
+        system_instruction=TINH_CACH_NHAN_VAT,
+        caching_config={"ttl": "3600s"}  # Cache 1 hour
+    ),
+    history=trimmed_history
+)
     
     print(f"🔄 Khởi tạo chat với '{SELECTED_MODEL}' (API Key #{current_key_index + 1})")
     return new_session
@@ -404,9 +405,11 @@ async def on_message(message):
                 
                 # 🕐 Thêm thời gian hiện tại vào prompt (cho bot biết múi giờ)
                 vn_time = get_vn_time()
-                time_info = f"[Thời gian VN hiện tại: {vn_time.strftime('%H:%M:%S')} - {vn_time.strftime('%A, %d/%m/%Y')}]"
-                
-                tin_nhan_gui_ai = loi_nhac_he_thong + time_info + "\n" + user_msg
+                if any(word in user_msg.lower() for word in ['mấy giờ', 'giờ', 'time']):
+                    time_info = f"[Thời gian VN: {vn_time.strftime('%H:%M:%S')}]"
+                    tin_nhan_gui_ai = loi_nhac_he_thong + time_info + "\n" + user_msg
+                else:
+                    tin_nhan_gui_ai = loi_nhac_he_thong + user_msg
                 
                 # 🔄 Gửi tin đến AI
                 response = None
