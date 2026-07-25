@@ -236,7 +236,6 @@ def khoi_tao_gemini(existing_history=None):
     model=SELECTED_MODEL,
     config=types.GenerateContentConfig(
         system_instruction=TINH_CACH_NHAN_VAT,
-        caching_config={"ttl": "3600s"}  # Cache 1 hour
     ),
     history=trimmed_history
 )
