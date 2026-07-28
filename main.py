@@ -346,8 +346,8 @@ async def on_message(message):
             if image_content:
                 response = await send_to_gemini([
                     tin_nhan_gui_ai,
-                    types.Part.from_data(
-                        data=image_content['base64'],
+                    types.Part.from_bytes(
+                        data=image_content['data'],
                         mime_type=image_content['media_type']
                     )
                 ])
