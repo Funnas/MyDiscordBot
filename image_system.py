@@ -13,7 +13,6 @@ Tách riêng khỏi main.py — Toàn bộ logic liên quan tới ẢNH:
    và map sang file ảnh tương ứng để gửi kèm.
 =================================================================
 """
-import base64
 import os
 import random
 import re
@@ -24,7 +23,12 @@ import re
 async def process_image_attachment(attachment):
     """
     Tải và xử lý ảnh từ attachment Discord.
-    Trả về {'base64':..., 'media_type':...} hoặc None nếu không phải ảnh/fail.
+    Trả về {'data': bytes_anh_tho, 'media_type':...} hoặc None nếu
+    không phải ảnh/fail.
+
+    LƯU Ý: 'data' là bytes THÔ, không phải base64 string — SDK
+    google-genai (types.Part.from_bytes) tự lo việc encode khi gửi
+    request lên API, không cần encode tay ở đây.
     """
     try:
         if not attachment.filename:
@@ -35,7 +39,6 @@ async def process_image_attachment(attachment):
             return None
 
         image_data = await attachment.read()
-        base64_image = base64.b64encode(image_data).decode('utf-8')
 
         filename_lower = attachment.filename.lower()
         if filename_lower.endswith('.png'):
@@ -49,7 +52,7 @@ async def process_image_attachment(attachment):
         else:
             return None
 
-        return {'base64': base64_image, 'media_type': media_type}
+        return {'data': image_data, 'media_type': media_type}
     except Exception as e:
         print(f"❌ Lỗi xử lý ảnh: {e}")
         return None
