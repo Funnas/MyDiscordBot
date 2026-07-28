@@ -1,0 +1,20 @@
+{
+  "1063688314563080272": {
+    "chat_count": 999,
+    "real_name": null,
+    "_note": "Đây là ID của Funnas (ID_CUA_FUNNAS trong .env) - Tier 0 luôn tự động, không cần sửa dòng này, để hoặc xóa cũng được vì code check bằng ID_CUA_FUNNAS chứ không phải file này."
+  },
+
+  "662826510973140993": {
+    "chat_count": 6,
+    "real_name": "Nhiên",
+    "_note": "VÍ DỤ MẪU - Tier 1 (bạn thân, đã có real_name). Sửa ID thành ID Discord thật của bạn cậu, sửa real_name theo ý muốn."
+
+  },
+
+  "222222222222222222": {
+    "chat_count": 5,
+    "real_name": null,
+    "_note": "VÍ DỤ MẪU - Tier 2 (bạn tốt, chat_count >= 5 nhưng chưa có real_name). Sửa ID thật vào."
+  }
+}
