@@ -82,6 +82,19 @@ IMAGE_MAP = {
 # [IMG:Talk] đều khớp được, tránh miss do lệch chữ hoa/thường.
 _IMAGE_MAP_LOWER = {k.lower(): v for k, v in IMAGE_MAP.items()}
 
+# Xác suất THỰC SỰ gửi ảnh khi tag đó xuất hiện (0.0 - 1.0).
+# Tag không có trong đây mặc định = 1.0 (luôn gửi khi AI chèn tag).
+# Dùng để giảm tần suất 1 tag cụ thể mà không cần sửa tinh_cach.txt
+# (vì AI không tuân theo tỉ lệ % chính xác được, code random mới
+# đảm bảo đúng con số).
+#
+# "phone": 0.3 -> chỉ thực sự gửi ảnh 30% số lần AI chèn tag này,
+# tức GIẢM TẦN SUẤT 70% so với trước (tag vẫn bị xóa khỏi text như
+# thường trong 70% còn lại, chỉ là không đính kèm ảnh lần đó).
+TAG_SEND_PROBABILITY = {
+    "phone": 0.3,
+}
+
 IMG_TAG_PATTERN = re.compile(r'\[IMG:(\w+)\]')
 
 
@@ -93,7 +106,9 @@ def extract_image_tag(response_text):
     - clean_text: text đã xóa tag, dùng để hiển thị cho user
       (user KHÔNG BAO GIỜ thấy tag [IMG:...] trong tin nhắn)
     - duong_dan_anh: path file ảnh để gửi kèm, None nếu không có
-      tag / tag không map được ảnh / file ảnh không tồn tại
+      tag / tag không map được ảnh / file ảnh không tồn tại / bị
+      random loại do TAG_SEND_PROBABILITY (tag vẫn bị xóa khỏi
+      text bình thường, chỉ là lần đó không đính kèm ảnh)
     """
     match = IMG_TAG_PATTERN.search(response_text)
     clean_text = IMG_TAG_PATTERN.sub('', response_text).strip()
@@ -102,9 +117,17 @@ def extract_image_tag(response_text):
         return clean_text, None
 
     tag = match.group(1)
-    candidates = _IMAGE_MAP_LOWER.get(tag.lower())
+    tag_lower = tag.lower()
+
+    candidates = _IMAGE_MAP_LOWER.get(tag_lower)
     if not candidates:
         print(f"⚠️ Tag ảnh '{tag}' không có trong IMAGE_MAP, bỏ qua.")
+        return clean_text, None
+
+    # 🎲 Kiểm tra xác suất gửi ảnh (mặc định 1.0 = luôn gửi nếu không config)
+    probability = TAG_SEND_PROBABILITY.get(tag_lower, 1.0)
+    if random.random() > probability:
+        print(f"🎲 Tag '{tag}' bị random bỏ qua gửi ảnh (probability={probability}).")
         return clean_text, None
 
     chosen = random.choice(candidates)
