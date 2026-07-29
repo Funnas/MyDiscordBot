@@ -1,4 +1,12 @@
 import os
+
+# 🛡️ Mở keep_alive TRƯỚC TIÊN — nếu 1 trong các import phía dưới bị lỗi
+# (VD: đặt sai tên file module), Flask server này vẫn kịp chạy, giữ
+# Render không bị coi là "không traffic" và tắt hẳn. Nhờ vậy UptimeRobot
+# vẫn ping được, có thời gian xem log sửa lỗi thay vì bot biến mất luôn.
+from keep_alive import keep_alive
+keep_alive()
+
 import time
 import asyncio
 import discord
@@ -8,13 +16,9 @@ from google import genai
 from google.genai import types
 from datetime import datetime, timezone, timedelta
 
-from keep_alive import keep_alive
 import memory_system as mem
 import image_system as img
 import autochat_system as autochat
-
-# Gọi hàm mở cổng web trước khi bot chạy
-keep_alive()
 
 load_dotenv()
 TOKEN = os.getenv('DISCORD_TOKEN')
@@ -229,7 +233,16 @@ async def check_chan_nan():
         response = await send_to_gemini(prompt)
 
         if response:
-            await channel.send(response.text)
+            # 🐛 FIX: auto-chat cũng phải tách tag [IMG:xxx] như chat thường,
+            # trước đây gửi thẳng response.text nên tag bị lộ ra thành chữ
+            # thay vì gửi kèm ảnh.
+            clean_text, image_path = img.extract_image_tag(response.text)
+
+            if image_path:
+                await channel.send(content=clean_text, file=discord.File(image_path))
+            else:
+                await channel.send(clean_text)
+
             last_chat_time = time.time()
             autochat.record_auto_message_sent()
 
