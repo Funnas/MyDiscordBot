@@ -1,21 +1,35 @@
 """
 image_system.py
 =================================================================
-Tách riêng khỏi main.py — Toàn bộ logic liên quan tới ẢNH:
+Tách riêng khỏi main.py — Toàn bộ logic liên quan tới ẢNH/VIDEO:
 
-1. process_image_attachment()  -> ĐỌC ảnh user gửi (giữ nguyên
-   logic cũ từ main.py, không đổi gì)
+1. process_image_attachment()  -> ĐỌC ảnh Discord gửi (file đính
+   kèm, tải trực tiếp qua discord.py)
 
-2. extract_image_tag()         -> Sempai TỰ GỬI ảnh có sẵn.
+2. process_video_attachment()  -> ĐỌC video Discord gửi (cùng cơ
+   chế như ảnh, Gemini "xem" được video qua inline bytes, chỉ khác
+   mime_type + có giới hạn kích thước vì video ăn token nhiều hơn)
+
+3. download_image_from_url()   -> ĐỌC ảnh Messenger gửi (Facebook
+   chỉ cung cấp URL ảnh qua webhook, không phải file đính kèm, nên
+   cần tải về bằng HTTP request)
+
+4. extract_image_tag()         -> Sempai TỰ GỬI ảnh có sẵn.
    AI tự chèn tag ẩn [IMG:ten_tag] ở cuối câu trả lời khi thấy
    ngữ cảnh phù hợp (không tốn thêm API call nào, chỉ thêm vài
    token cho cái tag). Code ở đây tách tag ra khỏi text hiển thị
    và map sang file ảnh tương ứng để gửi kèm.
+
+Cả (1), (2), (3) đều trả về CÙNG 1 format: {'data': bytes, 'media_type': str}
+để chat_core.py xử lý giống nhau, không cần biết media đến từ đâu
+hay là ảnh hay video.
 =================================================================
 """
 import os
 import random
 import re
+
+import requests
 
 # =================================================================
 # 🖼️ ĐỌC ẢNH USER GỬI (giữ nguyên logic cũ)
@@ -55,6 +69,87 @@ async def process_image_attachment(attachment):
         return {'data': image_data, 'media_type': media_type}
     except Exception as e:
         print(f"❌ Lỗi xử lý ảnh: {e}")
+        return None
+
+
+# =================================================================
+# 🎬 ĐỌC VIDEO USER GỬI — Gemini "xem" được video qua inline bytes
+# y hệt cơ chế ảnh, chỉ khác extension/mime_type + giới hạn size
+# =================================================================
+VIDEO_EXTENSIONS_MIME = {
+    '.mp4': 'video/mp4',
+    '.mov': 'video/quicktime',
+    '.webm': 'video/webm',
+    '.avi': 'video/x-msvideo',
+    '.mkv': 'video/x-matroska',
+}
+
+# Video ăn RẤT nhiều token hơn ảnh (mỗi giây video ~ nhiều frame),
+# giới hạn kích thước để tránh request quá nặng/tốn quota bất ngờ.
+MAX_VIDEO_BYTES = 15 * 1024 * 1024  # 15 MB
+
+
+async def process_video_attachment(attachment):
+    """
+    Tải và xử lý VIDEO từ attachment Discord.
+    Trả về CÙNG FORMAT với process_image_attachment():
+    {'data': bytes_video_tho, 'media_type': str} hoặc None nếu
+    không phải video / quá lớn / fail.
+    """
+    try:
+        if not attachment.filename:
+            return None
+
+        filename_lower = attachment.filename.lower()
+        media_type = None
+        for ext, mime in VIDEO_EXTENSIONS_MIME.items():
+            if filename_lower.endswith(ext):
+                media_type = mime
+                break
+
+        if not media_type:
+            return None
+
+        if attachment.size and attachment.size > MAX_VIDEO_BYTES:
+            print(f"⚠️ Video '{attachment.filename}' quá lớn "
+                  f"({attachment.size} bytes > {MAX_VIDEO_BYTES}), bỏ qua.")
+            return None
+
+        video_data = await attachment.read()
+        return {'data': video_data, 'media_type': media_type}
+    except Exception as e:
+        print(f"❌ Lỗi xử lý video: {e}")
+        return None
+
+
+# =================================================================
+# 🖼️ ĐỌC ẢNH MESSENGER GỬI (Facebook gửi URL, không phải file)
+# =================================================================
+def download_image_from_url(url):
+    """
+    Tải ảnh từ URL (Messenger webhook chỉ cung cấp URL, không gửi
+    file đính kèm trực tiếp như Discord).
+
+    Trả về CÙNG FORMAT với process_image_attachment():
+    {'data': bytes_anh_tho, 'media_type': str} hoặc None nếu fail.
+    """
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+
+        content_type = resp.headers.get('Content-Type', 'image/jpeg').lower()
+        if 'png' in content_type:
+            media_type = 'image/png'
+        elif 'gif' in content_type:
+            media_type = 'image/gif'
+        elif 'webp' in content_type:
+            media_type = 'image/webp'
+        else:
+            media_type = 'image/jpeg'
+
+        return {'data': resp.content, 'media_type': media_type}
+    except Exception as e:
+        print(f"❌ Lỗi tải ảnh từ URL Messenger: {e}")
         return None
 
 
