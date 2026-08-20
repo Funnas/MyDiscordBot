@@ -48,7 +48,7 @@ MODELS_TO_TRY = [
 ]
 SELECTED_MODEL = None
 
-# Load tính cách từ file (KHÔNG đổi cách load, chỉ nội dung file có thêm 2 đoạn nhỏ)
+# Load tính cách từ file
 try:
     with open('tinh_cach.txt', 'r', encoding='utf-8') as file:
         TINH_CACH_NHAN_VAT = file.read()
@@ -151,7 +151,7 @@ try:
     chat_session = khoi_tao_gemini()
     print(f"✅ BOT SẴN SÀNG! Model: {SELECTED_MODEL}")
     print(f"📌 Relationship System: ENABLED (memory_system.py)")
-    print(f"📌 Image Recognition + Auto-send: ENABLED (image_system.py)")
+    print(f"📌 Image + Video Recognition + Auto-send: ENABLED (image_system.py)")
     print(f"📌 Auto-chat streak limit: {autochat.AUTO_STREAK_LIMIT}")
     print(f"📌 Sleep mode window: {autochat.EVENING_START_HOUR}h - {autochat.EVENING_END_HOUR}h (VN)")
     print(f"📌 Timezone: VN (UTC+7)\n")
@@ -233,9 +233,7 @@ async def check_chan_nan():
         response = await send_to_gemini(prompt)
 
         if response:
-            # 🐛 FIX: auto-chat cũng phải tách tag [IMG:xxx] như chat thường,
-            # trước đây gửi thẳng response.text nên tag bị lộ ra thành chữ
-            # thay vì gửi kèm ảnh.
+            # Tách tag [IMG:xxx] như chat thường, tránh lộ tag ra text
             clean_text, image_path = img.extract_image_tag(response.text)
 
             if image_path:
@@ -279,12 +277,12 @@ async def on_message(message):
 
     user_msg = message.content.replace(f'<@{client.user.id}>', '').strip()
 
-    # 🐛 FIX BUG: trước đây return sớm nếu user_msg rỗng, kể cả khi có ảnh
-    # đính kèm => bot không bao giờ đọc được ảnh nếu gửi ảnh không kèm chữ.
+    # Fix bug: trước đây return sớm nếu user_msg rỗng, kể cả khi có ảnh/video
+    # đính kèm => bot không đọc được nếu gửi ảnh/video không kèm chữ.
     if not user_msg and not message.attachments:
         return
     if not user_msg and message.attachments:
-        user_msg = "[Người dùng gửi ảnh không kèm chữ]"
+        user_msg = "[Người dùng gửi ảnh/video không kèm chữ]"
 
     async with message.channel.typing():
         try:
@@ -337,7 +335,9 @@ async def on_message(message):
             if profile_context:
                 loi_nhac_he_thong += profile_context + " "
 
-            # 🖼️ Đọc ảnh user gửi nếu có (image_system.py)
+            # 🖼️🎬 Đọc ảnh/video user gửi nếu có (thử ảnh trước, không match
+            # thì thử video — cùng biến image_content vì cả 2 đều cùng
+            # format {'data':..., 'media_type':...})
             image_content = None
             if message.attachments:
                 for attachment in message.attachments:
@@ -345,6 +345,12 @@ async def on_message(message):
                     if im:
                         image_content = im
                         user_msg += f" [Ảnh được gửi: {attachment.filename}]"
+                        break
+
+                    vid = await img.process_video_attachment(attachment)
+                    if vid:
+                        image_content = vid
+                        user_msg += f" [Video được gửi: {attachment.filename}]"
                         break
 
             # 🕐 Chỉ thêm giờ VN vào prompt khi user hỏi giờ
