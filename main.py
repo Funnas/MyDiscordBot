@@ -36,9 +36,17 @@ API_KEYS = [
 ]
 API_KEYS = [key for key in API_KEYS if key]
 
-current_key_index = 0
 ai_client = None
-chat_session = None
+
+# 🔒 TÁCH 2 "NGĂN" LỊCH SỬ HỘI THOẠI RIÊNG BIỆT — private (kênh
+# riêng tư #test + DM) và public (mọi kênh khác, VD #general).
+# Tách hẳn ở tầng session (không chỉ dặn AI bằng lời) để nội dung
+# riêng tư KHÔNG BAO GIỜ lẫn vào context khi trả lời ở kênh chung,
+# tránh rò rỉ thật sự chứ không chỉ dựa vào AI "nhớ đừng nói ra".
+sessions = {
+    "private": {"chat_session": None, "current_key_index": 0},
+    "public": {"chat_session": None, "current_key_index": 0},
+}
 
 # ⚡ GEMINI 3.0+ MODELS
 MODELS_TO_TRY = [
@@ -105,11 +113,11 @@ def kiem_tra_model_kha_dung():
 
 
 # =================================================================
-# 🚀 HÀM KHỞI TẠO GEMINI 3.0+
+# 🚀 HÀM KHỞI TẠO GEMINI 3.0+ — theo bucket (private/public)
 # =================================================================
-def khoi_tao_gemini(existing_history=None):
-    """Khởi tạo chat session mới với model đã chọn"""
-    global ai_client, current_key_index, SELECTED_MODEL
+def khoi_tao_gemini(bucket, existing_history=None):
+    """Khởi tạo/khởi tạo lại chat session cho 1 bucket cụ thể."""
+    global ai_client, SELECTED_MODEL
 
     if not SELECTED_MODEL:
         kiem_tra_model_kha_dung()
@@ -117,7 +125,8 @@ def khoi_tao_gemini(existing_history=None):
     if not API_KEYS:
         raise ValueError("❌ FATAL: Không có API Key nào!")
 
-    active_key = API_KEYS[current_key_index]
+    state = sessions[bucket]
+    active_key = API_KEYS[state["current_key_index"]]
     ai_client = genai.Client(api_key=active_key)
 
     trimmed_history = existing_history[-3:] if existing_history else None
@@ -130,7 +139,8 @@ def khoi_tao_gemini(existing_history=None):
         history=trimmed_history
     )
 
-    print(f"🔄 Khởi tạo chat với '{SELECTED_MODEL}' (API Key #{current_key_index + 1})")
+    state["chat_session"] = new_session
+    print(f"🔄 Khởi tạo chat [{bucket}] với '{SELECTED_MODEL}' (API Key #{state['current_key_index'] + 1})")
     return new_session
 
 
@@ -139,6 +149,12 @@ def khoi_tao_gemini(existing_history=None):
 # =================================================================
 ID_KENH_CHAT = 1529857332916256800
 ID_CUA_FUNNAS = int(os.getenv('ID_CUA_FUNNAS', '1063688314563080272'))
+
+# 🔒 Kênh RIÊNG TƯ (VD #test) — nếu không cấu hình, mọi kênh coi
+# như "public" hết (giữ nguyên hành vi cũ, tính năng chỉ bật khi
+# có điền ID này).
+ID_KENH_RIENG_TU = 1530140566598320149 os.getenv('ID_KENH_RIENG_TU')
+
 last_chat_time = time.time()
 
 # ⚡ KHỞI TẠO
@@ -148,16 +164,35 @@ print("=" * 60)
 
 try:
     kiem_tra_model_kha_dung()
-    chat_session = khoi_tao_gemini()
+    khoi_tao_gemini("public")
+    khoi_tao_gemini("private")
     print(f"✅ BOT SẴN SÀNG! Model: {SELECTED_MODEL}")
     print(f"📌 Relationship System: ENABLED (memory_system.py)")
     print(f"📌 Image + Video Recognition + Auto-send: ENABLED (image_system.py)")
     print(f"📌 Auto-chat streak limit: {autochat.AUTO_STREAK_LIMIT}")
     print(f"📌 Sleep mode window: {autochat.EVENING_START_HOUR}h - {autochat.EVENING_END_HOUR}h (VN)")
+    if ID_KENH_RIENG_TU:
+        print(f"📌 Kênh riêng tư: ENABLED (channel {ID_KENH_RIENG_TU} + mọi DM)")
+    else:
+        print(f"📌 Kênh riêng tư: chưa cấu hình (ID_KENH_RIENG_TU rỗng) — chỉ DM được coi là riêng tư")
     print(f"📌 Timezone: VN (UTC+7)\n")
 except Exception as e:
     print(f"❌ LỖI KHỞI TẠO: {e}")
     exit(1)
+
+
+def get_bucket_for_channel(channel):
+    """
+    Xác định "ngăn" lịch sử hội thoại cho kênh/DM này.
+    - DM luôn là "private" (chỉ 2 người, không ai khác thấy)
+    - Kênh đúng ID_KENH_RIENG_TU (VD #test) -> "private"
+    - Mọi kênh khác -> "public"
+    """
+    if isinstance(channel, discord.DMChannel):
+        return "private"
+    if ID_KENH_RIENG_TU and str(getattr(channel, 'id', '')) == str(ID_KENH_RIENG_TU):
+        return "private"
+    return "public"
 
 # Discord Client
 intents = discord.Intents.default()
@@ -167,36 +202,37 @@ client = discord.Client(intents=intents)
 
 # =================================================================
 # 🔄 HÀM DÙNG CHUNG: Gửi tin nhắn cho Gemini kèm auto key-rotation
+# THEO ĐÚNG BUCKET (private/public) — không lẫn lịch sử 2 ngăn
 # =================================================================
-async def send_to_gemini(content):
+async def send_to_gemini(bucket, content):
     """
-    Gửi content cho Gemini, tự động xoay API key khi hết quota,
-    tự raise nếu model không tồn tại. Dùng chung cho cả chat
-    thường lẫn auto-chat.
+    Gửi content cho Gemini theo đúng bucket, tự động xoay API key
+    khi hết quota, tự raise nếu model không tồn tại.
     """
-    global chat_session, current_key_index
+    state = sessions[bucket]
 
     for attempt in range(len(API_KEYS)):
         try:
-            return await asyncio.to_thread(chat_session.send_message, content)
+            return await asyncio.to_thread(state["chat_session"].send_message, content)
         except Exception as e:
             error_str = str(e)
 
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
-                current_key_index = (current_key_index + 1) % len(API_KEYS)
-                print(f"⚠️ Key #{current_key_index} hết quota! Chuyển key.")
-                old_history = chat_session.history if hasattr(chat_session, 'history') else []
-                chat_session = khoi_tao_gemini(old_history)
+                state["current_key_index"] = (state["current_key_index"] + 1) % len(API_KEYS)
+                print(f"⚠️ [{bucket}] Key #{state['current_key_index']} hết quota! Chuyển key.")
+                old_history = state["chat_session"].history if hasattr(state["chat_session"], 'history') else []
+                khoi_tao_gemini(bucket, old_history)
 
             elif "404" in error_str or "NOT_FOUND" in error_str:
                 print(f"❌ Model '{SELECTED_MODEL}' không tồn tại!")
                 raise e
 
             else:
-                print(f"⚠️ Lỗi (attempt {attempt + 1}): {error_str[:100]}")
+                print(f"⚠️ [{bucket}] Lỗi (attempt {attempt + 1}): {error_str[:100]}")
                 if attempt == len(API_KEYS) - 1:
                     raise e
     return None
+
 
 
 # =================================================================
@@ -206,7 +242,7 @@ async def send_to_gemini(content):
 @tasks.loop(minutes=15)
 async def check_chan_nan():
     """Kiểm tra mỗi 15 phút, nếu 30 phút không có tin → tự động chat."""
-    global last_chat_time, chat_session, current_key_index
+    global last_chat_time
 
     if time.time() - last_chat_time <= 1800:
         return
@@ -220,6 +256,8 @@ async def check_chan_nan():
     if not channel:
         return
 
+    bucket = get_bucket_for_channel(channel)
+
     try:
         prompt = "[Hệ thống: TỰ ĐỘNG BẮT CHUYỆN. Đã 30 phút không ai nhắn, hãy than chán hoặc tìm Funnas.]"
 
@@ -230,7 +268,7 @@ async def check_chan_nan():
                 "thêm nữa cho tới khi có người trả lời.]"
             )
 
-        response = await send_to_gemini(prompt)
+        response = await send_to_gemini(bucket, prompt)
 
         if response:
             # Tách tag [IMG:xxx] như chat thường, tránh lộ tag ra text
@@ -267,7 +305,7 @@ async def on_ready():
 @client.event
 async def on_message(message):
     """Xử lý tin nhắn từ DM hoặc mention"""
-    global last_chat_time, chat_session, current_key_index
+    global last_chat_time
 
     if message.author == client.user:
         return
@@ -283,6 +321,8 @@ async def on_message(message):
         return
     if not user_msg and message.attachments:
         user_msg = "[Người dùng gửi ảnh/video không kèm chữ]"
+
+    bucket = get_bucket_for_channel(message.channel)
 
     async with message.channel.typing():
         try:
@@ -330,6 +370,24 @@ async def on_message(message):
 
             loi_nhac_he_thong += "] "
 
+            # 🔒 Không gian riêng tư vs chung — chỉ có ý nghĩa khi đang
+            # chat với Funnas (tier 0), vì đây là ranh giới bảo mật cho
+            # CHÍNH Funnas, không áp dụng khi đang trả lời người khác.
+            if tier == 0:
+                if bucket == "private":
+                    loi_nhac_he_thong += (
+                        "[Đang ở không gian RIÊNG TƯ, chỉ có Funnas và bạn, "
+                        "không ai khác thấy được — có thể thân mật, ấm áp "
+                        "hơn bình thường.] "
+                    )
+                else:
+                    loi_nhac_he_thong += (
+                        "[Đang ở kênh CHUNG, có thể có người khác thấy — "
+                        "TUYỆT ĐỐI không nhắc lại/tiết lộ bất kỳ điều gì đã "
+                        "nói riêng với Funnas ở không gian riêng tư trước đó, "
+                        "dù có được hỏi.] "
+                    )
+
             # 📁 Chèn thêm profile context nếu có (memory_system.py)
             profile_context = mem.get_profile_context(message.author.id, ID_CUA_FUNNAS, user_real_name)
             if profile_context:
@@ -363,7 +421,7 @@ async def on_message(message):
 
             # 🔄 Gửi tin đến AI
             if image_content:
-                response = await send_to_gemini([
+                response = await send_to_gemini(bucket, [
                     tin_nhan_gui_ai,
                     types.Part.from_bytes(
                         data=image_content['data'],
@@ -371,7 +429,7 @@ async def on_message(message):
                     )
                 ])
             else:
-                response = await send_to_gemini(tin_nhan_gui_ai)
+                response = await send_to_gemini(bucket, tin_nhan_gui_ai)
 
             # 📤 Gửi response — tách tag ảnh trước khi hiển thị (image_system.py)
             if response:
