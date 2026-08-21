@@ -64,6 +64,17 @@ except FileNotFoundError:
     print("⚠️ Không tìm file 'tinh_cach.txt', dùng prompt mặc định")
     TINH_CACH_NHAN_VAT = "Bạn là trợ lý AI."
 
+# Load thêm file romance.txt (fanservice nhẹ nhàng, tách riêng khỏi
+# tinh_cach.txt cho dễ chỉnh sửa). File KHÔNG bắt buộc phải có —
+# nếu thiếu, bot vẫn chạy bình thường, chỉ là không có phần này.
+try:
+    with open('romance.txt', 'r', encoding='utf-8') as file:
+        romance_content = file.read()
+        TINH_CACH_NHAN_VAT += "\n\n" + romance_content
+        print("💕 Đã load romance.txt")
+except FileNotFoundError:
+    print("ℹ️ Không có file 'romance.txt', bỏ qua (không bắt buộc)")
+
 # =================================================================
 # 🕐 TIMEZONE - Múi giờ Việt Nam (UTC+7)
 # =================================================================
@@ -153,7 +164,7 @@ ID_CUA_FUNNAS = int(os.getenv('ID_CUA_FUNNAS', '1063688314563080272'))
 # 🔒 Kênh RIÊNG TƯ (VD #test) — nếu không cấu hình, mọi kênh coi
 # như "public" hết (giữ nguyên hành vi cũ, tính năng chỉ bật khi
 # có điền ID này).
-ID_KENH_RIENG_TU = 1530140566598320149 os.getenv('ID_KENH_RIENG_TU')
+ID_KENH_RIENG_TU = os.getenv('ID_KENH_RIENG_TU')
 
 last_chat_time = time.time()
 
