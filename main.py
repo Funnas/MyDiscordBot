@@ -219,12 +219,37 @@ async def send_to_gemini(bucket, content):
     """
     Gửi content cho Gemini theo đúng bucket, tự động xoay API key
     khi hết quota, tự raise nếu model không tồn tại.
+
+    QUAN TRỌNG: Kiểm tra response.text NGAY TẠI ĐÂY trước khi trả
+    về — nếu Gemini trả response nhưng bị safety filter chặn nội
+    dung, việc đọc response.text sẽ ném exception. Nếu không bắt ở
+    đây, exception sẽ văng ra tận on_message, hiện fallback tối
+    nghĩa "có chuyện gì đó không ổn" mà không rõ lý do thật.
     """
     state = sessions[bucket]
 
     for attempt in range(len(API_KEYS)):
         try:
-            return await asyncio.to_thread(state["chat_session"].send_message, content)
+            response = await asyncio.to_thread(state["chat_session"].send_message, content)
+
+            # Thử đọc .text ngay — nếu bị chặn, sẽ raise ở đây, bắt
+            # được và log chi tiết lý do, KHÔNG cần retry bằng key
+            # khác (bị chặn nội dung thì đổi key nào cũng vậy).
+            try:
+                _ = response.text
+                return response
+            except Exception as text_err:
+                feedback = getattr(response, 'prompt_feedback', None)
+                candidates = getattr(response, 'candidates', None)
+                print(f"🚫 [{bucket}] Response không có text hợp lệ (nhiều khả năng bị safety filter chặn).")
+                print(f"    Lỗi khi đọc .text: {text_err}")
+                print(f"    prompt_feedback: {feedback}")
+                if candidates:
+                    for c in candidates:
+                        print(f"    candidate: finish_reason={getattr(c, 'finish_reason', None)} "
+                              f"safety_ratings={getattr(c, 'safety_ratings', None)}")
+                return None
+
         except Exception as e:
             error_str = str(e)
 
@@ -451,7 +476,7 @@ async def on_message(message):
                 else:
                     await message.reply(clean_text)
             else:
-                await message.reply("Hmm~, tất cả các kho lưu trữ đều cạn kiệt rồi...")
+                await message.reply("Hmm~, câu này chị chưa trả lời được. Hỏi lại cách khác xem.")
 
         except Exception as e:
             print(f"❌ Lỗi: {e}")
