@@ -239,15 +239,32 @@ async def send_to_gemini(bucket, content):
                 _ = response.text
                 return response
             except Exception as text_err:
-                feedback = getattr(response, 'prompt_feedback', None)
-                candidates = getattr(response, 'candidates', None)
                 print(f"🚫 [{bucket}] Response không có text hợp lệ (nhiều khả năng bị safety filter chặn).")
                 print(f"    Lỗi khi đọc .text: {text_err}")
-                print(f"    prompt_feedback: {feedback}")
-                if candidates:
-                    for c in candidates:
-                        print(f"    candidate: finish_reason={getattr(c, 'finish_reason', None)} "
-                              f"safety_ratings={getattr(c, 'safety_ratings', None)}")
+
+                # Mỗi bước log dưới đây bọc riêng try/except — vì các
+                # thuộc tính này CŨNG có thể tự ném lỗi khi bị chặn
+                # (giống hệt .text), getattr() KHÔNG bắt được lỗi kiểu
+                # đó (chỉ bắt AttributeError). Nếu để lỗi ở đây văng
+                # ra, nó sẽ thoát khỏi khối except này luôn, vòng qua
+                # hết 6 key vô ích rồi mới crash tới on_message.
+                try:
+                    print(f"    prompt_feedback: {getattr(response, 'prompt_feedback', None)}")
+                except Exception as log_err:
+                    print(f"    (không đọc được prompt_feedback: {log_err})")
+
+                try:
+                    candidates = getattr(response, 'candidates', None)
+                    if candidates:
+                        for c in candidates:
+                            try:
+                                print(f"    candidate: finish_reason={getattr(c, 'finish_reason', None)} "
+                                      f"safety_ratings={getattr(c, 'safety_ratings', None)}")
+                            except Exception as log_err2:
+                                print(f"    (không đọc được chi tiết candidate: {log_err2})")
+                except Exception as log_err3:
+                    print(f"    (không đọc được candidates: {log_err3})")
+
                 return None
 
         except Exception as e:
