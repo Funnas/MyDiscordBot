@@ -36,16 +36,22 @@ API_KEYS = [
 ]
 API_KEYS = [key for key in API_KEYS if key]
 
-ai_client = None
-
 # 🔒 TÁCH 2 "NGĂN" LỊCH SỬ HỘI THOẠI RIÊNG BIỆT — private (kênh
 # riêng tư #test + DM) và public (mọi kênh khác, VD #general).
 # Tách hẳn ở tầng session (không chỉ dặn AI bằng lời) để nội dung
 # riêng tư KHÔNG BAO GIỜ lẫn vào context khi trả lời ở kênh chung,
 # tránh rò rỉ thật sự chứ không chỉ dựa vào AI "nhớ đừng nói ra".
+#
+# ⚠️ QUAN TRỌNG: "ai_client" PHẢI lưu RIÊNG cho từng bucket, KHÔNG
+# dùng chung 1 biến global. Trước đây dùng chung → mỗi lần gọi
+# khoi_tao_gemini() cho bucket sau sẽ GHI ĐÈ client của bucket
+# trước, khiến client cũ bị Python tự dọn rác (garbage collected)
+# và đóng kết nối ngầm — gây lỗi "RuntimeError: Cannot send a
+# request, as the client has been closed" khi bucket đó được dùng
+# lại sau đó. Đây chính là nguyên nhân bug thật sự đã gặp.
 sessions = {
-    "private": {"chat_session": None, "current_key_index": 0},
-    "public": {"chat_session": None, "current_key_index": 0},
+    "private": {"chat_session": None, "current_key_index": 0, "ai_client": None},
+    "public": {"chat_session": None, "current_key_index": 0, "ai_client": None},
 }
 
 # ⚡ GEMINI 3.0+ MODELS
@@ -127,8 +133,11 @@ def kiem_tra_model_kha_dung():
 # 🚀 HÀM KHỞI TẠO GEMINI 3.0+ — theo bucket (private/public)
 # =================================================================
 def khoi_tao_gemini(bucket, existing_history=None):
-    """Khởi tạo/khởi tạo lại chat session cho 1 bucket cụ thể."""
-    global ai_client, SELECTED_MODEL
+    """Khởi tạo/khởi tạo lại chat session cho 1 bucket cụ thể.
+    ai_client được lưu RIÊNG vào state của từng bucket (state["ai_client"])
+    — KHÔNG dùng biến global chung, tránh bucket này ghi đè/làm mất
+    tham chiếu client của bucket kia (xem giải thích ở khai báo sessions)."""
+    global SELECTED_MODEL
 
     if not SELECTED_MODEL:
         kiem_tra_model_kha_dung()
@@ -138,11 +147,11 @@ def khoi_tao_gemini(bucket, existing_history=None):
 
     state = sessions[bucket]
     active_key = API_KEYS[state["current_key_index"]]
-    ai_client = genai.Client(api_key=active_key)
+    state["ai_client"] = genai.Client(api_key=active_key)
 
     trimmed_history = existing_history[-3:] if existing_history else None
 
-    new_session = ai_client.chats.create(
+    new_session = state["ai_client"].chats.create(
         model=SELECTED_MODEL,
         config=types.GenerateContentConfig(
             system_instruction=TINH_CACH_NHAN_VAT,
@@ -512,13 +521,7 @@ async def on_message(message):
             import traceback
             print(f"❌ Lỗi trong on_message: {e}")
             traceback.print_exc()
-            # 🩺 TẠM THỜI (debug): chèn thẳng loại lỗi + nội dung lỗi
-            # vào tin nhắn Discord để chẩn đoán nhanh, khỏi cần mò
-            # Render Logs. Sau khi tìm ra nguyên nhân thật, XÓA dòng
-            # debug_info này, trả lại đúng câu "có chuyện gì đó không
-            # ổn..." như cũ cho tự nhiên.
-            debug_info = f"{type(e).__name__}: {str(e)[:300]}"
-            await message.reply(f"Hmm~, có chuyện gì đó không ổn...\n\n🩺 DEBUG: `{debug_info}`")
+            await message.reply("Hmm~, có chuyện gì đó không ổn...")
 
 
 # =================================================================
