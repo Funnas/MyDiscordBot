@@ -273,8 +273,21 @@ async def send_to_gemini(bucket, content):
             if "429" in error_str or "RESOURCE_EXHAUSTED" in error_str:
                 state["current_key_index"] = (state["current_key_index"] + 1) % len(API_KEYS)
                 print(f"⚠️ [{bucket}] Key #{state['current_key_index']} hết quota! Chuyển key.")
-                old_history = state["chat_session"].history if hasattr(state["chat_session"], 'history') else []
-                khoi_tao_gemini(bucket, old_history)
+                try:
+                    old_history = state["chat_session"].history if hasattr(state["chat_session"], 'history') else []
+                    khoi_tao_gemini(bucket, old_history)
+                except Exception as reinit_err:
+                    # Nếu tạo lại session CŨNG lỗi (VD: lịch sử cũ chứa
+                    # lượt từng bị chặn, Gemini từ chối nạp lại) — log
+                    # rõ rồi thử lại KHÔNG mang theo lịch sử cũ, tránh
+                    # lỗi văng thẳng ra on_message.
+                    print(f"⚠️ [{bucket}] Lỗi khi tạo lại session: {reinit_err}")
+                    print(f"    Thử tạo lại session KHÔNG mang lịch sử cũ...")
+                    try:
+                        khoi_tao_gemini(bucket, None)
+                    except Exception as reinit_err2:
+                        print(f"❌ [{bucket}] Vẫn lỗi khi tạo lại session (không lịch sử): {reinit_err2}")
+                        return None
 
             elif "404" in error_str or "NOT_FOUND" in error_str:
                 print(f"❌ Model '{SELECTED_MODEL}' không tồn tại!")
@@ -496,8 +509,16 @@ async def on_message(message):
                 await message.reply("Hmm~, câu này chị chưa trả lời được. Hỏi lại cách khác xem.")
 
         except Exception as e:
-            print(f"❌ Lỗi: {e}")
-            await message.reply("Hmm~, có chuyện gì đó không ổn...")
+            import traceback
+            print(f"❌ Lỗi trong on_message: {e}")
+            traceback.print_exc()
+            # 🩺 TẠM THỜI (debug): chèn thẳng loại lỗi + nội dung lỗi
+            # vào tin nhắn Discord để chẩn đoán nhanh, khỏi cần mò
+            # Render Logs. Sau khi tìm ra nguyên nhân thật, XÓA dòng
+            # debug_info này, trả lại đúng câu "có chuyện gì đó không
+            # ổn..." như cũ cho tự nhiên.
+            debug_info = f"{type(e).__name__}: {str(e)[:300]}"
+            await message.reply(f"Hmm~, có chuyện gì đó không ổn...\n\n🩺 DEBUG: `{debug_info}`")
 
 
 # =================================================================
