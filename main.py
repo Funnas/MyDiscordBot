@@ -218,7 +218,7 @@ def get_bucket_for_channel(channel):
 intents = discord.Intents.default()
 intents.message_content = True
 client = discord.Client(intents=intents)
-
+tree = discord.app_commands.CommandTree(client)
 
 # =================================================================
 # 🔄 HÀM DÙNG CHUNG: Gửi tin nhắn cho Gemini kèm auto key-rotation
@@ -361,19 +361,52 @@ async def check_chan_nan():
         print(f"❌ Lỗi auto-chat: {e}")
 
 
+from datetime import time as dtime
+
+REMINDER_TIME_VN = dtime(hour=22, minute=30, tzinfo=timezone(timedelta(hours=7)))
+
+@tasks.loop(time=REMINDER_TIME_VN)
+async def nhac_ngu_som():
+    channel = client.get_channel(int(ID_KENH_CHAT))
+    if not channel:
+        return
+    prompt = ("[Hệ thống: Đã 22h30 tối giờ VN. Hãy than chán một chút kiểu Sempai, "
+              "rồi nhắc Funnas đi ngủ sớm đi, đừng thức khuya nữa.]")
+    response = await send_to_gemini(get_bucket_for_channel(channel), prompt)
+    if response:
+        clean_text, image_path = img.extract_image_tag(response.text)
+        await channel.send(clean_text)
+
 # =================================================================
 # 🟢 BOT ONLINE
 # =================================================================
 @client.event
 async def on_ready():
     print(f"❤️ {client.user.name} đã online!")
+    await tree.sync()
     print(f"📌 Model: {SELECTED_MODEL}")
     print(f"📌 Keys: {len(API_KEYS)} API keys\n")
 
     if not check_chan_nan.is_running():
         check_chan_nan.start()
+    if not nhac_ngu_som.is_running():
+        nhac_ngu_som.start()
+# =================================================================
+@tree.command(name="sleep", description="Sempai đi ngủ, tắt auto-chat")
+async def sleep_cmd(interaction: discord.Interaction):
+    if str(interaction.user.id) != str(ID_CUA_FUNNAS):
+        await interaction.response.send_message("Chỉ Funnas mới ra lệnh này được thôi~", ephemeral=True)
+        return
+    autochat.enable_sleep_mode()
+    await interaction.response.send_message("🌙 Ngủ đây, im lặng tới khi được gọi dậy.")
 
-
+@tree.command(name="on", description="Đánh thức Sempai dậy")
+async def on_cmd(interaction: discord.Interaction):
+    if str(interaction.user.id) != str(ID_CUA_FUNNAS):
+        await interaction.response.send_message("Chỉ Funnas mới ra lệnh này được thôi~", ephemeral=True)
+        return
+    autochat.disable_sleep_mode()
+    await interaction.response.send_message("☀️ Dậy rồi nè.")
 # =================================================================
 # 💭 BOT NHẬN TIN NHẮN
 # =================================================================
