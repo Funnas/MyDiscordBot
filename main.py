@@ -10,6 +10,7 @@ keep_alive()
 import time
 import asyncio
 import discord
+import google_memory as gmem
 from discord.ext import tasks
 from dotenv import load_dotenv
 from google import genai
@@ -348,7 +349,9 @@ async def check_chan_nan():
         if response:
             # Tách tag [IMG:xxx] như chat thường, tránh lộ tag ra text
             clean_text, image_path = img.extract_image_tag(response.text)
-
+            clean_text, remember_fact = mem.extract_remember_tag(clean_text)
+            if remember_fact:
+                gmem.append_memory(remember_fact)
             if image_path:
                 await channel.send(content=clean_text, file=discord.File(image_path))
             else:
@@ -541,8 +544,10 @@ async def on_message(message):
 
             # 📤 Gửi response — tách tag ảnh trước khi hiển thị (image_system.py)
             if response:
-                clean_text, image_path = img.extract_image_tag(response.text)
-
+            clean_text, image_path = img.extract_image_tag(response.text)
+            clean_text, remember_fact = mem.extract_remember_tag(clean_text)
+            if remember_fact:
+                gmem.append_memory(remember_fact)
                 if image_path:
                     await message.reply(content=clean_text, file=discord.File(image_path))
                 else:
