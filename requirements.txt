@@ -2,3 +2,4 @@ discord.py
 python-dotenv
 google-genai
 flask
+google-api-python-client
