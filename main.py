@@ -544,16 +544,16 @@ async def on_message(message):
 
             # 📤 Gửi response — tách tag ảnh trước khi hiển thị (image_system.py)
             if response:
-            clean_text, image_path = img.extract_image_tag(response.text)
-            clean_text, remember_fact = mem.extract_remember_tag(clean_text)
-            if remember_fact:
-                gmem.append_memory(remember_fact)
-                if image_path:
-                    await message.reply(content=clean_text, file=discord.File(image_path))
+                clean_text, image_path = img.extract_image_tag(response.text)
+                clean_text, remember_fact = mem.extract_remember_tag(clean_text)
+                if remember_fact:
+                    gmem.append_memory(remember_fact)
+                    if image_path:
+                        await message.reply(content=clean_text, file=discord.File(image_path))
+                    else:
+                        await message.reply(clean_text)
                 else:
-                    await message.reply(clean_text)
-            else:
-                await message.reply("Hmm~, câu này chị chưa trả lời được. Hỏi lại cách khác xem.")
+                    await message.reply("Hmm~, câu này chị chưa trả lời được. Hỏi lại cách khác xem.")
 
         except Exception as e:
             import traceback
