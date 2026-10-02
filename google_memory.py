@@ -2,8 +2,8 @@ from google.oauth2 import service_account
 from googleapiclient.discovery import build
 
 SCOPES = ['https://www.googleapis.com/auth/documents']
-SERVICE_ACCOUNT_FILE = 'gen-lang-client-0424081789-xxxxx.json'  # đổi thành đúng tên file JSON của bạn
-DOCUMENT_ID = 'DÁN_DOCUMENT_ID_CỦA_BẠN_VÀO_ĐÂY'  # lấy từ URL Google Doc
+SERVICE_ACCOUNT_FILE = 'gen-lang-client-0424081789.json'  # đổi thành đúng tên file JSON của bạn
+DOCUMENT_ID = '1OQQOn2L114pbci2TTh6DopTZl_abX5igxEpNTxHoHbY'  # lấy từ URL Google Doc
 
 def get_docs_service():
     creds = service_account.Credentials.from_service_account_file(
