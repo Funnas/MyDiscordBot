@@ -546,15 +546,20 @@ async def on_message(message):
             if response:
                 clean_text, image_path = img.extract_image_tag(response.text)
                 clean_text, remember_fact = mem.extract_remember_tag(clean_text)
+
                 if remember_fact:
                     await asyncio.to_thread(gmem.append_memory, remember_fact)
-                    if image_path:
-                        await message.reply(content=clean_text, file=discord.File(image_path))
-                    else:
-                        await message.reply(clean_text)
-                else:
-                    await message.reply("Hmm~, câu này chị chưa trả lời được. Hỏi lại cách khác xem.")
 
+                if not clean_text and not image_path:
+                    clean_text = "Ừm, chị nhớ rồi nhé~"
+
+                if image_path:
+                    await message.reply(content=clean_text, file=discord.File(image_path))
+                else:
+                    await message.reply(clean_text)
+            else:
+                await message.reply("Hmm~, câu này chị chưa trả lời được. Hỏi lại cách khác xem.")
+                
         except Exception as e:
             import traceback
             print(f"❌ Lỗi trong on_message: {e}")
