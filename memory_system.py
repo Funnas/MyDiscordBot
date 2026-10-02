@@ -155,3 +155,18 @@ def get_profile_context(user_id, funnas_id, real_name):
             return f"[Thông tin thêm về {real_name} (đọc để hiểu, không đọc lại nguyên văn):\n{content}\n]"
 
     return None
+# =================================================================
+# 🧠 REMEMBER TAG
+# =================================================================
+REMEMBER_PATTERN = re.compile(r'\[REMEMBER:\s*(.+?)\]', re.IGNORECASE | re.DOTALL)
+
+
+def extract_remember_tag(text):
+    if not text:
+        return text, None
+    match = REMEMBER_PATTERN.search(text)
+    if not match:
+        return text, None
+    fact = match.group(1).strip()
+    clean_text = REMEMBER_PATTERN.sub('', text).strip()
+    return clean_text, (fact or None)
