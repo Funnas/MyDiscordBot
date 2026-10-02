@@ -351,7 +351,7 @@ async def check_chan_nan():
             clean_text, image_path = img.extract_image_tag(response.text)
             clean_text, remember_fact = mem.extract_remember_tag(clean_text)
             if remember_fact:
-                gmem.append_memory(remember_fact)
+                await asyncio.to_thread(gmem.append_memory, remember_fact)
             if image_path:
                 await channel.send(content=clean_text, file=discord.File(image_path))
             else:
@@ -547,7 +547,7 @@ async def on_message(message):
                 clean_text, image_path = img.extract_image_tag(response.text)
                 clean_text, remember_fact = mem.extract_remember_tag(clean_text)
                 if remember_fact:
-                    gmem.append_memory(remember_fact)
+                    await asyncio.to_thread(gmem.append_memory, remember_fact)
                     if image_path:
                         await message.reply(content=clean_text, file=discord.File(image_path))
                     else:
