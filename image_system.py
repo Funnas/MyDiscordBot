@@ -165,11 +165,14 @@ IMAGE_MAP = {
     "happy_food": ["Giving_soda.jpg"],
     "Talk": ["Talk.png"],
     "worried": ["Head_ache.jpg"],
-    "shy": ["Shy.jpg"],
+    "shy": ["Shy.jpg","Maid-outfit-shy face.jpg"],
     "annoyed": ["Stun_mind.jpg"],
     "phone": ["LookinPhone.jpg"],
     "friendly": ["friendly_finger.jpg"],
     "eyes": ["lovely_eyes.jpg"],
+    "Blushing_pouting":["Blushing-Pouting face_maidOutfit.jpg"],
+    "half-asleep":["I'm still half-asleep(wake up).jpg"],
+    "Cake":["MaidOutfit+cake.jpg"]
     "home": ["normal_outfit(home).jpg"],
 }
 
