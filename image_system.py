@@ -172,7 +172,7 @@ IMAGE_MAP = {
     "eyes": ["lovely_eyes.jpg"],
     "Blushing_pouting":["Blushing-Pouting face_maidOutfit.jpg"],
     "half-asleep":["I'm still half-asleep(wake up).jpg"],
-    "Cake":["MaidOutfit+cake.jpg"]
+    "Cake":["MaidOutfit+cake.jpg"],
     "home": ["normal_outfit(home).jpg"],
 }
 
