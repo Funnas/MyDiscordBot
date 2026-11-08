@@ -57,9 +57,9 @@ sessions = {
 
 # ⚡ GEMINI 3.0+ MODELS
 MODELS_TO_TRY = [
-    "gemini-3-flash-preview",
-    "gemini-3.1-pro-preview",
-    "gemini-3.1-flash-lite-preview",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
 ]
 SELECTED_MODEL = None
 
